@@ -45,18 +45,23 @@ fn main() {
                 vec![0, 0, 0, 0, 1, 0, 0, 0, 0],
                 vec![1, 1, 0, 1, 1, 1, 0, 1, 1],
                 vec![0, 0, 0, 0, 0, 0, 0, 0, 0],
-                vec![1, 1, 1, 1, 0, 1, 1, 1, 1],
-                vec![0, 1, 0, 1, 0, 0, 0, 1, 0],
-                vec![0, 0, 0, 0, 0, 1, 0, 0, 0],
-                vec![1, 0, 1, 1, 1, 1, 1, 0, 1],
-                vec![1, 0, 0, 0, 0, 0, 0, 0, 1],
+                vec![0, 1, 0, 1, 0, 1, 0, 1, 0],
+                vec![0, 1, 0, 1, 1, 1, 0, 1, 0],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0],
+                vec![1, 0, 1, 1, 0, 1, 1, 0, 1],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0],
+                vec![0, 1, 1, 0, 0, 0, 1, 1, 0],
+                vec![0, 1, 0, 1, 1, 1, 0, 1, 0],
+                vec![0, 0, 0, 1, 0, 1, 0, 0, 0],
+                vec![1, 1, 0, 0, 0, 0, 0, 1, 1],
+                vec![0, 1, 0, 1, 0, 1, 0, 1, 0],
             ],
             agent: State { x: 0, y: 0 },
             agent2: State { x: 8, y: 0 },
-            goal: State { x: 4, y: 7 },
+            goal: State { x: 4, y: 12 },
         };
 
-        for step in 0..100 {
+        for step in 0..150 {
             let state1 = env.agent;
             let state2 = env.agent2;
 
@@ -85,7 +90,7 @@ fn main() {
 
             clear().unwrap();
             println!(
-                "Episode: {} Step: {} | A Wins: {} | B Wins: {}",
+                "Episode: {} Step: {} | Abel Wins: {} | Cain Wins: {}",
                 episode, step, times_won_1, times_won_2
             );
             print_env(&env);
@@ -99,7 +104,7 @@ fn distance(a: State, b: State) -> i32 {
 }
 
 impl Env {
-    fn move_agent(&self, pos: State, action: usize) -> State {
+    fn move_agent(&self, pos: State, action: usize) -> (State, bool) {
         let (dx, dy) = ACTIONS[action];
         let new_x = pos.x + dx;
         let new_y = pos.y + dy;
@@ -110,23 +115,23 @@ impl Env {
             || new_y as usize >= self.grid.len()
             || new_x as usize >= self.grid[0].len()
         {
-            return pos;
+            return (pos, true); // hit border
         }
 
         // wall check
         if self.grid[new_y as usize][new_x as usize] == 1 {
-            return pos;
+            return (pos, true); // hit wall
         }
 
-        State { x: new_x, y: new_y }
+        (State { x: new_x, y: new_y }, false)
     }
 
     fn step_both(&mut self, action1: usize, action2: usize) -> (f32, f32, Outcome) {
         let old1 = self.agent;
         let old2 = self.agent2;
 
-        let new1 = self.move_agent(self.agent, action1);
-        let new2 = self.move_agent(self.agent2, action2);
+        let (new1, hit1) = self.move_agent(self.agent, action1);
+        let (new2, hit2) = self.move_agent(self.agent2, action2);
 
         self.agent = new1;
         self.agent2 = new2;
@@ -140,18 +145,26 @@ impl Env {
             return (-10.0, 10.0, Outcome::Agent2Goal);
         }
 
-        // --- DISTANCE REWARD ---
-        let r1 = if distance(new1, self.goal) < distance(old1, self.goal) {
-            0.0
-        } else {
-            -0.2
-        };
+        // --- WALL PENALTY ---
+        let mut r1 = if hit1 { -5.0 } else { 0.0 };
+        let mut r2 = if hit2 { -5.0 } else { 0.0 };
 
-        let r2 = if distance(new2, self.goal) < distance(old2, self.goal) {
-            0.0
-        } else {
-            -0.2
-        };
+        // --- DISTANCE REWARD (only if not hitting wall) ---
+        if !hit1 {
+            if distance(new1, self.goal) < distance(old1, self.goal) {
+                r1 += 0.0;
+            } else {
+                r1 -= 0.2
+            }
+        }
+
+        if !hit2 {
+            if distance(new2, self.goal) < distance(old2, self.goal) {
+                r2 += 0.0;
+            } else {
+                r2 -= 0.2;
+            }
+        }
 
         (r1, r2, Outcome::Ongoing)
     }
@@ -196,7 +209,7 @@ fn print_env(env: &Env) {
             if env.agent.x == x as i32 && env.agent.y == y as i32 {
                 print!("A ");
             } else if env.agent2.x == x as i32 && env.agent2.y == y as i32 {
-                print!("B ");
+                print!("C ");
             } else if env.goal.x == x as i32 && env.goal.y == y as i32 {
                 print!("G ");
             } else if env.grid[y][x] == 1 {
