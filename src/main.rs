@@ -8,8 +8,13 @@ type QTable = HashMap<(State, usize), f32>;
 
 #[derive(Clone, Copy, Hash, Eq, PartialEq, Debug)]
 struct State {
-    x: i32,
-    y: i32,
+    up_blocked: bool,
+    down_blocked: bool,
+    left_blocked: bool,
+    right_blocked: bool,
+    goal_dx: i32,
+    goal_dy: i32,
+    last_action: i8,
 }
 
 enum Outcome {
@@ -19,10 +24,12 @@ enum Outcome {
 }
 
 struct Env {
-    grid: Vec<Vec<i32>>, // 0 = empty, 1 = wall
-    agent: State,
-    agent2: State,
-    goal: State,
+    grid: Vec<Vec<i32>>,
+    agent: (i32, i32),
+    agent2: (i32, i32),
+    goal: (i32, i32),
+    last_action1: i8,
+    last_action2: i8,
 }
 
 const ACTIONS: [(i32, i32); 4] = [
@@ -31,6 +38,43 @@ const ACTIONS: [(i32, i32); 4] = [
     (-1, 0), // left
     (1, 0),  // right
 ];
+
+fn generate_maze(width: usize, height: usize) -> Vec<Vec<i32>> {
+    let mut grid = vec![vec![1; width]; height];
+    let mut rng = rand::thread_rng();
+
+    fn carve(x: usize, y: usize, grid: &mut Vec<Vec<i32>>, rng: &mut ThreadRng) {
+        grid[y][x] = 0;
+
+        let mut directions = vec![(0isize, -2isize), (0, 2), (-2, 0), (2, 0)];
+
+        directions.shuffle(rng);
+
+        for (dx, dy) in directions {
+            let nx = x as isize + dx;
+            let ny = y as isize + dy;
+
+            if nx > 0
+                && ny > 0
+                && nx < (grid[0].len() as isize)
+                && ny < (grid.len() as isize)
+                && grid[ny as usize][nx as usize] == 1
+            {
+                // remove wall between
+                grid[(y as isize + dy / 2) as usize][(x as isize + dx / 2) as usize] = 0;
+
+                carve(nx as usize, ny as usize, grid, rng);
+            }
+        }
+    }
+
+    carve(1, 1, &mut grid, &mut rng);
+
+    grid[0][0] = 0;
+    grid[height - 1][width - 1] = 0;
+
+    grid
+}
 
 fn main() {
     let mut q1: QTable = HashMap::new();
@@ -41,37 +85,41 @@ fn main() {
 
     for episode in 0..1000 {
         let mut env = Env {
-            grid: vec![
-                vec![0, 0, 0, 0, 1, 0, 0, 0, 0],
-                vec![1, 1, 0, 1, 1, 1, 0, 1, 1],
-                vec![0, 0, 0, 0, 0, 0, 0, 0, 0],
-                vec![0, 1, 0, 1, 0, 1, 0, 1, 0],
-                vec![0, 1, 0, 1, 1, 1, 0, 1, 0],
-                vec![0, 0, 0, 0, 0, 0, 0, 0, 0],
-                vec![1, 0, 1, 1, 0, 1, 1, 0, 1],
-                vec![0, 0, 0, 0, 0, 0, 0, 0, 0],
-                vec![0, 1, 1, 0, 0, 0, 1, 1, 0],
-                vec![0, 1, 0, 1, 1, 1, 0, 1, 0],
-                vec![0, 0, 0, 1, 0, 1, 0, 0, 0],
-                vec![1, 1, 0, 0, 0, 0, 0, 1, 1],
-                vec![0, 1, 0, 1, 0, 1, 0, 1, 0],
-            ],
-            agent: State { x: 0, y: 0 },
-            agent2: State { x: 8, y: 0 },
-            goal: State { x: 4, y: 12 },
+            //grid: vec![
+            //    //Random Maze Generation
+            //    vec![0, 0, 0, 0, 1, 0, 0, 0, 0],
+            //    vec![1, 1, 0, 1, 1, 1, 0, 1, 1],
+            //    vec![0, 0, 0, 0, 0, 0, 0, 0, 0],
+            //    vec![0, 1, 0, 1, 0, 1, 0, 1, 0],
+            //    vec![0, 1, 0, 1, 1, 1, 0, 1, 0],
+            //    vec![0, 0, 0, 0, 0, 0, 0, 0, 0],
+            //    vec![1, 0, 1, 1, 0, 1, 1, 0, 1],
+            //    vec![0, 0, 0, 0, 0, 0, 0, 0, 0],
+            //    vec![0, 1, 1, 0, 0, 0, 1, 1, 0],
+            //    vec![0, 1, 0, 1, 1, 1, 0, 1, 0],
+            //    vec![0, 0, 0, 1, 0, 1, 0, 0, 0],
+            //    vec![1, 1, 0, 0, 0, 0, 0, 1, 1],
+            //    vec![0, 1, 0, 1, 0, 1, 0, 1, 0],
+            //],
+            grid: generate_maze(13, 15),
+            agent: (1, 1),
+            agent2: (2, 1),
+            goal: (11, 13),
+            last_action1: -1,
+            last_action2: -1,
         };
 
         for step in 0..150 {
-            let state1 = env.agent;
-            let state2 = env.agent2;
+            let state1 = env.get_state(env.agent, env.last_action1);
+            let state2 = env.get_state(env.agent2, env.last_action2);
 
             let action1 = choose_action(state1, &q1, episode);
             let action2 = choose_action(state2, &q2, episode);
 
             let (reward1, reward2, outcome) = env.step_both(action1, action2);
 
-            let next_state1 = env.agent;
-            let next_state2 = env.agent2;
+            let next_state1 = env.get_state(env.agent, env.last_action1);
+            let next_state2 = env.get_state(env.agent2, env.last_action2);
 
             update_q(&mut q1, state1, action1, reward1, next_state1);
             update_q(&mut q2, state2, action2, reward2, next_state2);
@@ -90,40 +138,45 @@ fn main() {
 
             clear().unwrap();
             println!(
-                "Episode: {} Step: {} | Abel Wins: {} | Cain Wins: {}",
+                "Episode: {} Step: {} | Abel Wins: {} | Cain Wins: {}", //Print out an IQ for the bots
                 episode, step, times_won_1, times_won_2
             );
             print_env(&env);
-            thread::sleep(Duration::from_millis(100));
+            thread::sleep(Duration::from_millis(150));
         }
     }
 }
 
-fn distance(a: State, b: State) -> i32 {
-    (a.x - b.x).abs() + (a.y - b.y).abs()
+fn distance_pos(a: (i32, i32), b: (i32, i32)) -> i32 {
+    (a.0 - b.0).abs() + (a.1 - b.1).abs()
+}
+
+fn is_reverse(a: usize, b: i8) -> bool {
+    match (a, b) {
+        (0, 1) | (1, 0) | (2, 3) | (3, 2) => true,
+        _ => false,
+    }
 }
 
 impl Env {
-    fn move_agent(&self, pos: State, action: usize) -> (State, bool) {
+    fn move_agent(&self, pos: (i32, i32), action: usize) -> ((i32, i32), bool) {
         let (dx, dy) = ACTIONS[action];
-        let new_x = pos.x + dx;
-        let new_y = pos.y + dy;
+        let new_x = pos.0 + dx;
+        let new_y = pos.1 + dy;
 
-        // bounds check
         if new_x < 0
             || new_y < 0
             || new_y as usize >= self.grid.len()
             || new_x as usize >= self.grid[0].len()
         {
-            return (pos, true); // hit border
+            return (pos, true);
         }
 
-        // wall check
         if self.grid[new_y as usize][new_x as usize] == 1 {
-            return (pos, true); // hit wall
+            return (pos, true);
         }
 
-        (State { x: new_x, y: new_y }, false)
+        ((new_x, new_y), false)
     }
 
     fn step_both(&mut self, action1: usize, action2: usize) -> (f32, f32, Outcome) {
@@ -136,37 +189,76 @@ impl Env {
         self.agent = new1;
         self.agent2 = new2;
 
-        // --- GOAL CHECK ---
+        // GOAL
         if self.agent == self.goal {
             return (10.0, -10.0, Outcome::Agent1Goal);
         }
-
         if self.agent2 == self.goal {
             return (-10.0, 10.0, Outcome::Agent2Goal);
         }
 
-        // --- WALL PENALTY ---
+        // WALL PENALTY
         let mut r1 = if hit1 { -5.0 } else { 0.0 };
         let mut r2 = if hit2 { -5.0 } else { 0.0 };
 
-        // --- DISTANCE REWARD (only if not hitting wall) ---
+        // DISTANCE SHAPING
         if !hit1 {
-            if distance(new1, self.goal) < distance(old1, self.goal) {
-                r1 += 0.0;
+            if distance_pos(new1, self.goal) < distance_pos(old1, self.goal) {
+                r1 += 0.1;
             } else {
-                r1 -= 0.2
+                r1 -= 0.1;
             }
         }
 
         if !hit2 {
-            if distance(new2, self.goal) < distance(old2, self.goal) {
-                r2 += 0.0;
+            if distance_pos(new2, self.goal) < distance_pos(old2, self.goal) {
+                r2 += 0.1;
             } else {
-                r2 -= 0.2;
+                r2 -= 0.1;
             }
         }
 
+        // REVERSE PENALTY
+        if is_reverse(action1, self.last_action1) {
+            r1 -= 1.0;
+        }
+        if is_reverse(action2, self.last_action2) {
+            r2 -= 1.0;
+        }
+
+        // INACTION PENALTY
+        if new1 == old1 {
+            r1 -= 1.0;
+        }
+        if new2 == old2 {
+            r2 -= 1.0;
+        }
+
+        self.last_action1 = action1 as i8;
+        self.last_action2 = action2 as i8;
         (r1, r2, Outcome::Ongoing)
+    }
+
+    fn get_state(&self, pos: (i32, i32), last_action: i8) -> State {
+        let (x, y) = pos;
+
+        State {
+            up_blocked: self.is_blocked(x, y - 1),
+            down_blocked: self.is_blocked(x, y + 1),
+            left_blocked: self.is_blocked(x - 1, y),
+            right_blocked: self.is_blocked(x + 1, y),
+            goal_dx: (self.goal.0 - x).signum(),
+            goal_dy: (self.goal.1 - y).signum(),
+            last_action,
+        }
+    }
+
+    fn is_blocked(&self, x: i32, y: i32) -> bool {
+        if x < 0 || y < 0 || y as usize >= self.grid.len() || x as usize >= self.grid[0].len() {
+            return true;
+        }
+
+        self.grid[y as usize][x as usize] == 1
     }
 }
 
@@ -206,11 +298,11 @@ fn update_q(q: &mut QTable, state: State, action: usize, reward: f32, next_state
 fn print_env(env: &Env) {
     for y in 0..env.grid.len() {
         for x in 0..env.grid[0].len() {
-            if env.agent.x == x as i32 && env.agent.y == y as i32 {
+            if env.agent.0 == x as i32 && env.agent.1 == y as i32 {
                 print!("A ");
-            } else if env.agent2.x == x as i32 && env.agent2.y == y as i32 {
+            } else if env.agent2.0 == x as i32 && env.agent2.1 == y as i32 {
                 print!("C ");
-            } else if env.goal.x == x as i32 && env.goal.y == y as i32 {
+            } else if env.goal.0 == x as i32 && env.goal.1 == y as i32 {
                 print!("G ");
             } else if env.grid[y][x] == 1 {
                 print!("# ");
