@@ -1,3 +1,4 @@
+//use clearscreen::clear;
 use clearscreen::clear;
 use rand::prelude::*;
 use std::collections::HashMap;
@@ -109,7 +110,7 @@ fn main() {
             last_action2: -1,
         };
 
-        for step in 0..150 {
+        for step in 0..200 {
             let state1 = env.get_state(env.agent, env.last_action1);
             let state2 = env.get_state(env.agent2, env.last_action2);
 
