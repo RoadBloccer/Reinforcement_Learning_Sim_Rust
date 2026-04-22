@@ -1,7 +1,7 @@
-//use clearscreen::clear;
 use clearscreen::clear;
 use rand::prelude::*;
 use std::collections::HashMap;
+use std::hash::Hash;
 use std::thread;
 use std::time::Duration;
 
@@ -40,12 +40,20 @@ const ACTIONS: [(i32, i32); 4] = [
     (1, 0),  // right
 ];
 
-fn generate_maze(width: usize, height: usize) -> Vec<Vec<i32>> {
+fn generate_maze(width: usize, height: usize) -> (Vec<Vec<i32>>, (i32, i32)) {
     let mut grid = vec![vec![1; width]; height];
     let mut rng = rand::thread_rng();
+    let mut last_space: (i32, i32) = (1, 1);
 
-    fn carve(x: usize, y: usize, grid: &mut Vec<Vec<i32>>, rng: &mut ThreadRng) {
+    fn carve(
+        x: usize,
+        y: usize,
+        grid: &mut Vec<Vec<i32>>,
+        rng: &mut ThreadRng,
+        last_space: &mut (i32, i32),
+    ) {
         grid[y][x] = 0;
+        *last_space = (x as i32, y as i32);
 
         let mut directions = vec![(0isize, -2isize), (0, 2), (-2, 0), (2, 0)];
 
@@ -64,17 +72,17 @@ fn generate_maze(width: usize, height: usize) -> Vec<Vec<i32>> {
                 // remove wall between
                 grid[(y as isize + dy / 2) as usize][(x as isize + dx / 2) as usize] = 0;
 
-                carve(nx as usize, ny as usize, grid, rng);
+                carve(nx as usize, ny as usize, grid, rng, last_space);
             }
         }
     }
 
-    carve(1, 1, &mut grid, &mut rng);
+    carve(1, 1, &mut grid, &mut rng, &mut last_space);
 
     grid[0][0] = 0;
     grid[height - 1][width - 1] = 0;
 
-    grid
+    (grid, last_space)
 }
 
 fn main() {
@@ -85,27 +93,12 @@ fn main() {
     let mut times_won_2 = 0;
 
     for episode in 0..1000 {
+        let (grid, final_space) = generate_maze(15, 17);
         let mut env = Env {
-            //grid: vec![
-            //    //Random Maze Generation
-            //    vec![0, 0, 0, 0, 1, 0, 0, 0, 0],
-            //    vec![1, 1, 0, 1, 1, 1, 0, 1, 1],
-            //    vec![0, 0, 0, 0, 0, 0, 0, 0, 0],
-            //    vec![0, 1, 0, 1, 0, 1, 0, 1, 0],
-            //    vec![0, 1, 0, 1, 1, 1, 0, 1, 0],
-            //    vec![0, 0, 0, 0, 0, 0, 0, 0, 0],
-            //    vec![1, 0, 1, 1, 0, 1, 1, 0, 1],
-            //    vec![0, 0, 0, 0, 0, 0, 0, 0, 0],
-            //    vec![0, 1, 1, 0, 0, 0, 1, 1, 0],
-            //    vec![0, 1, 0, 1, 1, 1, 0, 1, 0],
-            //    vec![0, 0, 0, 1, 0, 1, 0, 0, 0],
-            //    vec![1, 1, 0, 0, 0, 0, 0, 1, 1],
-            //    vec![0, 1, 0, 1, 0, 1, 0, 1, 0],
-            //],
-            grid: generate_maze(13, 15),
+            grid,
             agent: (1, 1),
             agent2: (2, 1),
-            goal: (11, 13),
+            goal: final_space,
             last_action1: -1,
             last_action2: -1,
         };
