@@ -103,7 +103,7 @@ fn main() {
             last_action2: -1,
         };
 
-        for step in 0..200 {
+        for step in 0..255 {
             let state1 = env.get_state(env.agent, env.last_action1);
             let state2 = env.get_state(env.agent2, env.last_action2);
 
@@ -136,7 +136,7 @@ fn main() {
                 episode, step, times_won_1, times_won_2
             );
             print_env(&env);
-            thread::sleep(Duration::from_millis(150));
+            thread::sleep(Duration::from_millis(100));
         }
     }
 }
