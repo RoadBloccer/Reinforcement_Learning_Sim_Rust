@@ -1,7 +1,7 @@
-use clearscreen::clear;
 use rand::prelude::*;
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::io::{Write, stdout};
 use std::thread;
 use std::time::Duration;
 
@@ -91,13 +91,15 @@ fn main() {
 
     let mut times_won_1 = 0;
     let mut times_won_2 = 0;
+    print!("\x1B[2J\x1B[H");
+    stdout().flush().unwrap();
 
     for episode in 0..1000 {
         let (grid, final_space) = generate_maze(15, 17);
         let mut env = Env {
             grid,
             agent: (1, 1),
-            agent2: (2, 1),
+            agent2: (1, 1),
             goal: final_space,
             last_action1: -1,
             last_action2: -1,
@@ -130,12 +132,13 @@ fn main() {
                 Outcome::Ongoing => {}
             }
 
-            clear().unwrap();
+            print!("\x1B[H");
             println!(
                 "Episode: {} Step: {} | Abel Wins: {} | Cain Wins: {}", //Print out an IQ for the bots
                 episode, step, times_won_1, times_won_2
             );
             print_env(&env);
+            stdout().flush().unwrap();
             thread::sleep(Duration::from_millis(100));
         }
     }
